@@ -24,17 +24,22 @@ def get_token():
 
 # 📥 Read rows from Data1Table
 def get_data1(token):
-    url = f"{BASE_URL}/tables/Data1Table/rows"
+    table_id = "{154E455B-09CB-4218-8CFD-98E50128A2B0}"  # Data1Table ID
+    url = f"{BASE_URL}/tables/{table_id}/rows"
     headers = {"Authorization": f"Bearer {token}"}
     resp = requests.get(url, headers=headers).json()
+
+    st.write("📦 Raw API Response:")
+    st.json(resp)
 
     if "value" in resp:
         rows = [row["values"][0] for row in resp["value"]]
         columns = ["District", "Name", "Gender"]
         return pd.DataFrame(rows, columns=columns)
     else:
-        st.error("❌ Could not retrieve rows from Data1Table. Check table name and structure.")
+        st.error("❌ Could not retrieve rows from Data1Table. Check table ID and token scope.")
         return pd.DataFrame()
+
 
 # ➕ Append a new row to Table1 in data2 worksheet
 def append_to_data2(token, district, name, literacy):
