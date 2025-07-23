@@ -3,13 +3,17 @@ import pandas as pd
 import msal
 import requests
 
-# 🔐 Load secrets from Streamlit's Secrets Manager
+# 🔐 Load secrets from Streamlit Secrets Manager
 CLIENT_ID = st.secrets["graph"]["client_id"]
 CLIENT_SECRET = st.secrets["graph"]["client_secret"]
 TENANT_ID = st.secrets["graph"]["tenant_id"]
-EXCEL_FILE_ID = st.secrets["graph"]["excel_file_id"]
+DRIVE_ID = st.secrets["graph"]["drive_id"]
+ITEM_ID = st.secrets["graph"]["item_id"]
 
-# 🔑 Get access token from Microsoft Graph
+# 📌 API base components
+BASE_URL = f"https://graph.microsoft.com/v1.0/drives/{DRIVE_ID}/items/{ITEM_ID}/workbook"
+
+# 🔑 Get access token
 def get_token():
     app = msal.ConfidentialClientApplication(
         CLIENT_ID,
@@ -19,27 +23,22 @@ def get_token():
     token = app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
     return token["access_token"]
 
-# 📥 Read data1 sheet
+# 📥 Read data from data1 sheet
 def get_data1(token):
-    url = f"https://graph.microsoft.com/v1.0/me/drive/items/{EXCEL_FILE_ID}/workbook/worksheets/data1/usedRange"
+    url = f"{BASE_URL}/worksheets/data1/usedRange"
     headers = {"Authorization": f"Bearer {token}"}
     resp = requests.get(url, headers=headers).json()
-    
-    st.write("📦 Graph API Response:")
-    st.json(resp)  # Displays the full JSON response
 
     if "values" in resp:
         rows = resp["values"]
-        df = pd.DataFrame(rows[1:], columns=rows[0])
-        return df
+        return pd.DataFrame(rows[1:], columns=rows[0])
     else:
-        st.error("❌ 'values' not found in API response. Check sheet name or format.")
-        return pd.DataFrame()  # Return empty to prevent app crash
+        st.error("❌ Could not retrieve 'values' from data1. Check table format.")
+        return pd.DataFrame()
 
-
-# ➕ Append to data2 sheet
-def append_data2(token, district, name, literacy):
-    url = f"https://graph.microsoft.com/v1.0/me/drive/items/{EXCEL_FILE_ID}/workbook/worksheets/data2/tables/Table1/rows/add"
+# ➕ Append row to data2 table
+def append_to_data2(token, district, name, literacy):
+    url = f"{BASE_URL}/worksheets/data2/tables/Table1/rows/add"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
@@ -47,24 +46,32 @@ def append_data2(token, district, name, literacy):
     body = {
         "values": [[district, name, literacy]]
     }
-    response = requests.post(url, headers=headers, json=body)
-    return response.status_code == 201
+    resp = requests.post(url, headers=headers, json=body)
+    return resp.status_code == 201
 
 # 🧠 Streamlit UI
-st.title("📋 Literacy Data Entry Dashboard")
+st.title("📋 Literacy Data Entry Form")
 
 token = get_token()
 df = get_data1(token)
 
-district = st.selectbox("Select District", df["District"].unique())
-names = df[df["District"] == district]["Name"].unique()
-name = st.selectbox("Select Name", names)
-literacy = st.text_input("Enter Literacy Status")
+if df.empty:
+    st.stop()
 
-if district and name and literacy:
+# 🎯 Dynamic Dropdowns
+districts = df["District"].dropna().unique()
+selected_district = st.selectbox("Select District", sorted(districts))
+
+names = df[df["District"] == selected_district]["Name"].dropna().unique()
+selected_name = st.selectbox("Select Name", sorted(names))
+
+literacy_status = st.text_input("Enter Literacy Status")
+
+# 🔘 Submission
+if selected_district and selected_name and literacy_status:
     if st.button("Submit"):
-        success = append_data2(token, district, name, literacy)
+        success = append_to_data2(token, selected_district, selected_name, literacy_status)
         if success:
-            st.success("✅ Data submitted to Excel Online!")
+            st.success("✅ Entry submitted successfully to Excel Online!")
         else:
-            st.error("❌ Submission failed. Please try again.")
+            st.error("❌ Submission failed. Please check API permissions or table setup.")
