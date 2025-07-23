@@ -24,9 +24,18 @@ def get_data1(token):
     url = f"https://graph.microsoft.com/v1.0/me/drive/items/{EXCEL_FILE_ID}/workbook/worksheets/data1/usedRange"
     headers = {"Authorization": f"Bearer {token}"}
     resp = requests.get(url, headers=headers).json()
-    rows = resp["values"]
-    df = pd.DataFrame(rows[1:], columns=rows[0])
-    return df
+    
+    st.write("📦 Graph API Response:")
+    st.json(resp)  # Displays the full JSON response
+
+    if "values" in resp:
+        rows = resp["values"]
+        df = pd.DataFrame(rows[1:], columns=rows[0])
+        return df
+    else:
+        st.error("❌ 'values' not found in API response. Check sheet name or format.")
+        return pd.DataFrame()  # Return empty to prevent app crash
+
 
 # ➕ Append to data2 sheet
 def append_data2(token, district, name, literacy):
